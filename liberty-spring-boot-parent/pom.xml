@@ -70,12 +70,14 @@
 								<outputDirectory>target/liberty-alt-output-dir</outputDirectory>
 							</configuration>
 						</execution>
+<!--
 						<execution>
 							<id>thin-app</id>
 							<goals>
 								<goal>thin</goal>
 							</goals>
 						</execution>
+-->
 						<execution>
 							<id>install-apps</id>
 							<phase>package</phase>

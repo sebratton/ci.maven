@@ -27,6 +27,7 @@ import org.apache.maven.project.MavenProject;
 import org.apache.tools.ant.taskdefs.Copy;
 import org.w3c.dom.Element;
 
+import net.wasdev.wlp.ant.SpringBootUtilTask;
 import net.wasdev.wlp.maven.plugins.ApplicationXmlDocument;
 import net.wasdev.wlp.maven.plugins.server.PluginConfigSupport;
 
@@ -37,12 +38,28 @@ public class InstallAppMojoSupport extends PluginConfigSupport {
 
     protected ApplicationXmlDocument applicationXml = new ApplicationXmlDocument();
 
+    private void invokeSpringBootUtilCommand(File archiveSrc, File archiveTarget, File libIndexCacheTarget ) {
+    	SpringBootUtilTask springBootUtilTask = (SpringBootUtilTask) ant.createTask("antlib:net/wasdev/wlp/ant:springBootUtil");
+
+        if (springBootUtilTask == null) {
+            throw new IllegalStateException(MessageFormat.format(messages.getString("error.dependencies.not.found"), "springBootUtil"));
+        }
+
+        springBootUtilTask.setInstallDir(installDirectory);
+        springBootUtilTask.setTargetThinAppPath(archiveTarget.getAbsolutePath());
+        springBootUtilTask.setSourceAppPath(archiveSrc.getAbsolutePath());
+        springBootUtilTask.setTargetLibCachePath(libIndexCacheTarget.getAbsolutePath());
+        springBootUtilTask.execute();
+    }
+
     protected void installApp(Artifact artifact, boolean thin) throws Exception {
         File destDir = new File(serverDirectory, getAppsDirectory());
-
+        
         if (artifact.getFile() == null || artifact.getFile().isDirectory() || thin) {
             String warName = getAppFileName(project);
             if (thin) {
+            	File libIndexCacheFile = new File(sharedResourcesDirectory, "lib.index.cache");
+            	File archiveSrcFile = new File(project.getBuild().getDirectory() + "/" + warName); 
                 warName = "thin-" + warName;
                 // When the apps directory is "dropins" place the thin application in
                 // dropins/spring folder and
@@ -50,7 +67,11 @@ public class InstallAppMojoSupport extends PluginConfigSupport {
                 if (destDir.getName().equalsIgnoreCase("dropins")) {
                     destDir = new File(destDir, "spring");
                 }
-                copyLibIndexCache();
+                libIndexCacheFile.mkdirs();
+                invokeSpringBootUtilCommand(archiveSrcFile,
+                		                    new File(project.getBuild().getDirectory() + "/" + warName),
+                		                    libIndexCacheFile);
+             
             }
             File f = new File(project.getBuild().getDirectory() + "/" + warName);
             artifact.setFile(f);

@@ -11,24 +11,29 @@
 package net.wasdev.wlp.maven.extensions.thin;
 
 import java.io.File;
-import java.io.IOException;
-import java.security.NoSuchAlgorithmException;
-import java.util.zip.ZipException;
+import java.text.MessageFormat;
+import java.util.ResourceBundle;
 
-import org.apache.maven.plugin.AbstractMojo;
 import org.apache.maven.plugin.MojoExecutionException;
 import org.apache.maven.plugin.MojoFailureException;
+import org.apache.maven.plugins.annotations.Component;
 import org.apache.maven.plugins.annotations.LifecyclePhase;
 import org.apache.maven.plugins.annotations.Mojo;
 import org.apache.maven.plugins.annotations.Parameter;
 import org.apache.maven.plugins.annotations.ResolutionScope;
 import org.apache.maven.project.MavenProject;
+import org.apache.tools.ant.BuildException;
+import org.codehaus.mojo.pluginsupport.ant.AntHelper;
 
-import net.wasdev.wlp.common.springboot.util.SpringBootThinException;
-import net.wasdev.wlp.common.springboot.util.SpringBootThinUtil;
+import net.wasdev.wlp.ant.SpringBootUtilTask;
+import net.wasdev.wlp.maven.plugins.BasicSupport;
 
-@Mojo(name = "thin", defaultPhase = LifecyclePhase.PACKAGE, requiresProject = true, threadSafe = true, requiresDependencyResolution = ResolutionScope.COMPILE_PLUS_RUNTIME)
-public class SpringBootMavenThinPluginMojo extends AbstractMojo {
+//@Mojo(name = "thin", defaultPhase = LifecyclePhase.PACKAGE, requiresProject = true, threadSafe = true, requiresDependencyResolution = ResolutionScope.COMPILE_PLUS_RUNTIME)
+public class SpringBootMavenThinPluginMojo extends BasicSupport {
+
+	
+    protected static final ResourceBundle messages = ResourceBundle
+            .getBundle("net.wasdev.wlp.maven.plugins.MvnMessages");
 
     @Parameter(defaultValue = "${project}")
     private MavenProject project;
@@ -50,6 +55,13 @@ public class SpringBootMavenThinPluginMojo extends AbstractMojo {
     private String finalName;
 
     /**
+     *  Liberty profile install directory.
+     
+    @Parameter(defaultValue = "${liberty.install.dir}", required = true)
+    private File installDirectory;
+    */
+    
+    /**
      * Classifier to add to the artifact generated. If given, the artifact will be
      * attached with that classifier and the main artifact will be deployed as the
      * main artifact. If this is not given (default), it will replace the main
@@ -63,20 +75,23 @@ public class SpringBootMavenThinPluginMojo extends AbstractMojo {
     @Parameter
     private String classifier;
 
+    @Component(role = AntHelper.class)
+    protected AntHelper ant;
+    
     @Override
     public void execute() throws MojoExecutionException, MojoFailureException {
+    	init();
         try {
             File sourceFatJar = getTargetFile();
-            thin(sourceFatJar);
-        } catch (SpringBootThinException e) {
-            throw new MojoExecutionException(
-                    "Plugin execution failed because the application archive is not an executable archive. The repackage goal of the spring-boot-maven-plugin must be configured to run first in order to create the required executable archive.",
-                    e);
+            invokeSpringBootUtilCommand(sourceFatJar);
+        } catch (BuildException e) {
+            throw new MojoExecutionException("Plugin execution failed while runnning springBootUtil utility", e);
         } catch (Exception e) {
             throw new MojoExecutionException(e.getMessage(), e);
         }
     }
 
+    /*
     private void thin(File sourceFatJar)
             throws ZipException, IOException, NoSuchAlgorithmException, SpringBootThinException {
         File targetThinJar = new File(outputDirectory, "thin-" + sourceFatJar.getName());
@@ -85,6 +100,24 @@ public class SpringBootMavenThinPluginMojo extends AbstractMojo {
         getLog().info("Lib index cache: " + libIndexCache.getAbsolutePath());
         SpringBootThinUtil thinUtil = new SpringBootThinUtil(sourceFatJar, targetThinJar, libIndexCache, null);
         thinUtil.execute();
+    }
+    */
+
+    
+    private void invokeSpringBootUtilCommand(File sourceFatJar) {
+    	System.out.println("\n\n**********INVOKING SPRINGBOOTUTIL***********\n\n");
+    	System.out.println("install directory: " + installDirectory);
+    	SpringBootUtilTask springBootUtilTask = (SpringBootUtilTask) ant.createTask("antlib:net/wasdev/wlp/ant:springBootUtil");
+
+        if (springBootUtilTask == null) {
+            throw new IllegalStateException(MessageFormat.format(messages.getString("error.dependencies.not.found"), "springBootUtil"));
+        }
+
+        springBootUtilTask.setInstallDir(installDirectory);
+        springBootUtilTask.setTargetThinAppPath(new File(outputDirectory, "thin-" + sourceFatJar.getName()).getAbsolutePath());
+        springBootUtilTask.setSourceAppPath(sourceFatJar.getAbsolutePath());
+        springBootUtilTask.setTargetLibCachePath(new File(outputDirectory, "lib.index.cache").getAbsolutePath());
+        springBootUtilTask.execute();
     }
 
     private File getTargetFile() {
